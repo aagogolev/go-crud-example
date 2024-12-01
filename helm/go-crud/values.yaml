@@ -1,0 +1,16 @@
+replicaCount: 1
+
+image:
+  repository: go-crud-api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+database:
+  host: postgres
+  port: 5432
+  name: users
+  user: postgres
