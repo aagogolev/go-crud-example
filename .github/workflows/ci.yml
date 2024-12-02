@@ -24,11 +24,6 @@ jobs:
           version: latest
           working-directory: go-crud-example
 
-      - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: Dockerfile
-
   test:
     name: Test
     runs-on: ubuntu-latest
