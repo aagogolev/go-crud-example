@@ -5,6 +5,7 @@ import (
     "github.com/gorilla/mux"
     "go-crud-example/internal/model"
     "go-crud-example/internal/service"
+    "go-crud-example/internal/repository"
     "github.com/prometheus/client_golang/prometheus/promhttp"
     "log"
     "net/http"
@@ -49,11 +50,15 @@ func (h *UserHandler) RegisterRoutes(router *mux.Router) {
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
     var user model.User
     if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
 
     if err := h.service.CreateUser(&user); err != nil {
+        if err == service.ErrInvalidUser {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return
+        }
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
@@ -83,7 +88,11 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
     id := mux.Vars(r)["id"]
     user, err := h.service.GetUser(id)
     if err != nil {
-        http.Error(w, err.Error(), http.StatusNotFound)
+        if err == repository.ErrUserNotFound {
+            http.Error(w, err.Error(), http.StatusNotFound)
+            return
+        }
+        http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
 
@@ -98,12 +107,16 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
     id := mux.Vars(r)["id"]
     var user model.User
     if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-        http.Error(w, err.Error(), http.StatusBadRequest)
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
 
     user.ID = id
     if err := h.service.UpdateUser(&user); err != nil {
+        if err == repository.ErrUserNotFound {
+            http.Error(w, err.Error(), http.StatusNotFound)
+            return
+        }
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
@@ -118,6 +131,10 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
     id := mux.Vars(r)["id"]
     if err := h.service.DeleteUser(id); err != nil {
+        if err == repository.ErrUserNotFound {
+            http.Error(w, err.Error(), http.StatusNotFound)
+            return
+        }
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }

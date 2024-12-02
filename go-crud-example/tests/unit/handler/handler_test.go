@@ -3,33 +3,32 @@ package handler
 import (
     "bytes"
     "encoding/json"
-    "github.com/gorilla/mux"
-    h "go-crud-example/internal/handler"
+    "go-crud-example/internal/handler"
     "go-crud-example/internal/model"
+    "go-crud-example/internal/repository"
     "go-crud-example/internal/service"
-    "log"
     "net/http"
     "net/http/httptest"
-    "os"
     "testing"
+
+    "github.com/gorilla/mux"
+    "log"
 )
 
-type mockService struct {
+type mockUserService struct {
     users map[string]model.User
 }
 
-type testHandler struct {
-    *h.UserHandler
-    service *mockService
-}
-
-func newMockService() *mockService {
-    return &mockService{
-        users: make(map[string]model.User),
+func (m *mockUserService) CreateUser(user *model.User) error {
+    if user.Name == "" || user.Age == 0 {
+        return service.ErrInvalidUser
     }
+    user.ID = "1"
+    m.users[user.ID] = *user
+    return nil
 }
 
-func (m *mockService) GetUsers() ([]model.User, error) {
+func (m *mockUserService) GetUsers() ([]model.User, error) {
     users := make([]model.User, 0, len(m.users))
     for _, user := range m.users {
         users = append(users, user)
@@ -37,250 +36,194 @@ func (m *mockService) GetUsers() ([]model.User, error) {
     return users, nil
 }
 
-func (m *mockService) GetUser(id string) (*model.User, error) {
+func (m *mockUserService) GetUser(id string) (*model.User, error) {
     user, exists := m.users[id]
     if !exists {
-        return nil, service.ErrUserNotFound
+        return nil, repository.ErrUserNotFound
     }
     return &user, nil
 }
 
-func (m *mockService) CreateUser(user *model.User) error {
-    user.ID = "1" // Фиксированный ID для тестов
-    m.users[user.ID] = *user
-    return nil
-}
-
-func (m *mockService) UpdateUser(user *model.User) error {
+func (m *mockUserService) UpdateUser(user *model.User) error {
     if _, exists := m.users[user.ID]; !exists {
-        return service.ErrUserNotFound
+        return repository.ErrUserNotFound
     }
     m.users[user.ID] = *user
     return nil
 }
 
-func (m *mockService) DeleteUser(id string) error {
+func (m *mockUserService) DeleteUser(id string) error {
     if _, exists := m.users[id]; !exists {
-        return service.ErrUserNotFound
+        return repository.ErrUserNotFound
     }
     delete(m.users, id)
     return nil
 }
 
-func setupTestHandler() *testHandler {
-    logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
-    mockSvc := newMockService()
-    return &testHandler{
-        UserHandler: h.NewUserHandler(mockSvc, logger),
-        service:     mockSvc,
+func setupTest() (*handler.UserHandler, *mockUserService) {
+    mockService := &mockUserService{
+        users: make(map[string]model.User),
     }
+    logger := log.New(log.Writer(), "TEST: ", log.LstdFlags)
+    return handler.NewUserHandler(mockService, logger), mockService
 }
 
 func TestUserHandler_CreateUser(t *testing.T) {
-    th := setupTestHandler()
-    router := mux.NewRouter()
-    th.RegisterRoutes(router)
-
     tests := []struct {
         name       string
-        user       model.User
-        wantStatus int
+        user      model.User
+        wantCode  int
     }{
         {
             name: "valid user",
-            user: model.User{
-                Name: "John Doe",
-                Age:  25,
-            },
-            wantStatus: http.StatusOK,
+            user: model.User{Name: "John", Age: 30},
+            wantCode: http.StatusOK,
         },
         {
             name: "invalid user",
-            user: model.User{
-                Name: "",
-                Age:  -1,
-            },
-            wantStatus: http.StatusBadRequest,
+            user: model.User{},
+            wantCode: http.StatusBadRequest,
         },
     }
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
+            h, _ := setupTest()
+
             body, _ := json.Marshal(tt.user)
             req := httptest.NewRequest("POST", "/users", bytes.NewBuffer(body))
-            req.Header.Set("Content-Type", "application/json")
-            
-            rr := httptest.NewRecorder()
-            router.ServeHTTP(rr, req)
+            w := httptest.NewRecorder()
 
-            if status := rr.Code; status != tt.wantStatus {
-                t.Errorf("handler returned wrong status code: got %v want %v",
-                    status, tt.wantStatus)
+            h.CreateUser(w, req)
+
+            if w.Code != tt.wantCode {
+                t.Errorf("handler returned wrong status code: got %v want %v", w.Code, tt.wantCode)
             }
         })
     }
 }
 
 func TestUserHandler_GetUsers(t *testing.T) {
-    th := setupTestHandler()
-    router := mux.NewRouter()
-    th.RegisterRoutes(router)
+    h, mockService := setupTest()
+    mockService.users["1"] = model.User{ID: "1", Name: "John", Age: 30}
 
     req := httptest.NewRequest("GET", "/users", nil)
-    rr := httptest.NewRecorder()
-    router.ServeHTTP(rr, req)
+    w := httptest.NewRecorder()
 
-    if status := rr.Code; status != http.StatusOK {
-        t.Errorf("handler returned wrong status code: got %v want %v",
-            status, http.StatusOK)
-    }
+    h.GetUsers(w, req)
 
-    var users []model.User
-    if err := json.NewDecoder(rr.Body).Decode(&users); err != nil {
-        t.Errorf("Failed to decode response body: %v", err)
+    if w.Code != http.StatusOK {
+        t.Errorf("handler returned wrong status code: got %v want %v", w.Code, http.StatusOK)
     }
 }
 
 func TestUserHandler_GetUser(t *testing.T) {
-    th := setupTestHandler()
-    router := mux.NewRouter()
-    th.RegisterRoutes(router)
-
-    // Создаем тестового пользователя
-    testUser := model.User{
-        ID:   "1",
-        Name: "Test User",
-        Age:  30,
-    }
-    th.service.users[testUser.ID] = testUser
-
     tests := []struct {
-        name       string
-        userID     string
-        wantStatus int
+        name     string
+        userID   string
+        wantCode int
     }{
         {
-            name:       "existing user",
-            userID:     "1",
-            wantStatus: http.StatusOK,
+            name:     "existing user",
+            userID:   "1",
+            wantCode: http.StatusOK,
         },
         {
-            name:       "non-existing user",
-            userID:     "999",
-            wantStatus: http.StatusNotFound,
+            name:     "non-existing user",
+            userID:   "999",
+            wantCode: http.StatusNotFound,
         },
     }
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            req := httptest.NewRequest("GET", "/users/"+tt.userID, nil)
-            rr := httptest.NewRecorder()
-            router.ServeHTTP(rr, req)
+            h, mockService := setupTest()
+            mockService.users["1"] = model.User{ID: "1", Name: "John", Age: 30}
 
-            if status := rr.Code; status != tt.wantStatus {
-                t.Errorf("handler returned wrong status code: got %v want %v",
-                    status, tt.wantStatus)
+            req := httptest.NewRequest("GET", "/users/"+tt.userID, nil)
+            req = mux.SetURLVars(req, map[string]string{"id": tt.userID})
+            w := httptest.NewRecorder()
+
+            h.GetUser(w, req)
+
+            if w.Code != tt.wantCode {
+                t.Errorf("handler returned wrong status code: got %v want %v", w.Code, tt.wantCode)
             }
         })
     }
 }
 
 func TestUserHandler_UpdateUser(t *testing.T) {
-    th := setupTestHandler()
-    router := mux.NewRouter()
-    th.RegisterRoutes(router)
-
-    // Создаем тестового пользователя
-    testUser := model.User{
-        ID:   "1",
-        Name: "Test User",
-        Age:  30,
-    }
-    th.service.users[testUser.ID] = testUser
-
     tests := []struct {
-        name       string
-        userID     string
-        updateUser model.User
-        wantStatus int
+        name     string
+        userID   string
+        user     model.User
+        wantCode int
     }{
         {
-            name:   "valid update",
-            userID: "1",
-            updateUser: model.User{
-                Name: "Updated User",
-                Age:  35,
-            },
-            wantStatus: http.StatusOK,
+            name:     "valid update",
+            userID:   "1",
+            user:     model.User{ID: "1", Name: "John Updated", Age: 31},
+            wantCode: http.StatusOK,
         },
         {
-            name:   "non-existing user",
-            userID: "999",
-            updateUser: model.User{
-                Name: "Updated User",
-                Age:  35,
-            },
-            wantStatus: http.StatusNotFound,
+            name:     "non-existing user",
+            userID:   "999",
+            user:     model.User{ID: "999", Name: "Non Existing", Age: 25},
+            wantCode: http.StatusNotFound,
         },
     }
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            tt.updateUser.ID = tt.userID
-            body, _ := json.Marshal(tt.updateUser)
-            req := httptest.NewRequest("PUT", "/users/"+tt.userID, bytes.NewBuffer(body))
-            req.Header.Set("Content-Type", "application/json")
-            
-            rr := httptest.NewRecorder()
-            router.ServeHTTP(rr, req)
+            h, mockService := setupTest()
+            mockService.users["1"] = model.User{ID: "1", Name: "John", Age: 30}
 
-            if status := rr.Code; status != tt.wantStatus {
-                t.Errorf("handler returned wrong status code: got %v want %v",
-                    status, tt.wantStatus)
+            body, _ := json.Marshal(tt.user)
+            req := httptest.NewRequest("PUT", "/users/"+tt.userID, bytes.NewBuffer(body))
+            req = mux.SetURLVars(req, map[string]string{"id": tt.userID})
+            w := httptest.NewRecorder()
+
+            h.UpdateUser(w, req)
+
+            if w.Code != tt.wantCode {
+                t.Errorf("handler returned wrong status code: got %v want %v", w.Code, tt.wantCode)
             }
         })
     }
 }
 
 func TestUserHandler_DeleteUser(t *testing.T) {
-    th := setupTestHandler()
-    router := mux.NewRouter()
-    th.RegisterRoutes(router)
-
-    // Создаем тестового пользователя
-    testUser := model.User{
-        ID:   "1",
-        Name: "Test User",
-        Age:  30,
-    }
-    th.service.users[testUser.ID] = testUser
-
     tests := []struct {
-        name       string
-        userID     string
-        wantStatus int
+        name     string
+        userID   string
+        wantCode int
     }{
         {
-            name:       "existing user",
-            userID:     "1",
-            wantStatus: http.StatusNoContent,
+            name:     "existing user",
+            userID:   "1",
+            wantCode: http.StatusNoContent,
         },
         {
-            name:       "non-existing user",
-            userID:     "999",
-            wantStatus: http.StatusNotFound,
+            name:     "non-existing user",
+            userID:   "999",
+            wantCode: http.StatusNotFound,
         },
     }
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            req := httptest.NewRequest("DELETE", "/users/"+tt.userID, nil)
-            rr := httptest.NewRecorder()
-            router.ServeHTTP(rr, req)
+            h, mockService := setupTest()
+            mockService.users["1"] = model.User{ID: "1", Name: "John", Age: 30}
 
-            if status := rr.Code; status != tt.wantStatus {
-                t.Errorf("handler returned wrong status code: got %v want %v",
-                    status, tt.wantStatus)
+            req := httptest.NewRequest("DELETE", "/users/"+tt.userID, nil)
+            req = mux.SetURLVars(req, map[string]string{"id": tt.userID})
+            w := httptest.NewRecorder()
+
+            h.DeleteUser(w, req)
+
+            if w.Code != tt.wantCode {
+                t.Errorf("handler returned wrong status code: got %v want %v", w.Code, tt.wantCode)
             }
         })
     }
