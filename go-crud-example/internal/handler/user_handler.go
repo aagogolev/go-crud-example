@@ -36,10 +36,13 @@ func (h *UserHandler) RegisterRoutes(router *mux.Router) {
     // Health check endpoint
     router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
         w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]string{
+        if err := json.NewEncoder(w).Encode(map[string]string{
             "status":    "OK",
             "timestamp": time.Now().Format(time.RFC3339),
-        })
+        }); err != nil {
+            http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+            return
+        }
     }).Methods("GET")
 }
 
