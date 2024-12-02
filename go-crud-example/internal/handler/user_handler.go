@@ -56,7 +56,10 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
     }
 
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(user)
+    if err := json.NewEncoder(w).Encode(user); err != nil {
+        http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+        return
+    }
 }
 
 func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +82,10 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
     }
 
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(user)
+    if err := json.NewEncoder(w).Encode(user); err != nil {
+        http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+        return
+    }
 }
 
 func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +103,10 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
     }
 
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(user)
+    if err := json.NewEncoder(w).Encode(user); err != nil {
+        http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+        return
+    }
 }
 
 func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
