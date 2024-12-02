@@ -37,7 +37,8 @@ jobs:
           go-version: '1.22'
 
       - name: Run Tests
-        run: go test -v ./...
+        working-directory: go-crud-example
+        run: go test -v ./tests/...
 
   build:
     name: Build and Push
