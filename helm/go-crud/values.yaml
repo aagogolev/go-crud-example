@@ -1,6 +1,6 @@
 image:
   repository: alexgogolev92/go-crud-example
-  tag: 1.0.1
+  tag: c099e6862632e48d75b3d3bb7383c70930a6c2e7
   pullPolicy: Always
 
 config:
