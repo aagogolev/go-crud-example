@@ -18,13 +18,16 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 8000
+              name: http
+            - containerPort: 9090
+              name: metrics
           env:
             - name: DB_HOST
-              value: {{ .Values.database.host }}
+              value: {{ .Values.config.database.host }}
             - name: DB_PORT
-              value: "{{ .Values.database.port }}"
+              value: "{{ .Values.config.database.port }}"
             - name: DB_NAME
-              value: {{ .Values.database.name }}
+              value: {{ .Values.config.database.name }}
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
