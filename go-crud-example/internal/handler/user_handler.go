@@ -5,6 +5,7 @@ import (
     "github.com/gorilla/mux"
     "go-crud-example/internal/model"
     "go-crud-example/internal/service"
+    "github.com/prometheus/client_golang/prometheus/promhttp"
     "log"
     "net/http"
     "time"
@@ -28,6 +29,9 @@ func (h *UserHandler) RegisterRoutes(router *mux.Router) {
     router.HandleFunc("/users/{id}", h.GetUser).Methods("GET")
     router.HandleFunc("/users/{id}", h.UpdateUser).Methods("PUT")
     router.HandleFunc("/users/{id}", h.DeleteUser).Methods("DELETE")
+
+    // Metrics endpoint
+    router.Handle("/metrics", promhttp.Handler())
 
     // Health check endpoint
     router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
