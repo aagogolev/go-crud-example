@@ -10,5 +10,4 @@ FROM alpine:3.18
 WORKDIR /app
 
 COPY --from=builder /app/go-crud-example/main .
-COPY --from=builder /app/.env .
 CMD ["./main"]
