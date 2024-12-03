@@ -1,0 +1,26 @@
+image:
+  repository: alexgogolev92/go-crud-example
+  tag: c099e6862632e48d75b3d3bb7383c70930a6c2e7
+  pullPolicy: Always
+
+config:
+  database:
+    host: "postgres-postgresql"
+    port: "5432"
+    name: "users_db"
+    user: "postgres"
+    password: "your_password"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+replicaCount: 1
